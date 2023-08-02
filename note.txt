@@ -1,0 +1,13 @@
+
+
+python： 3.10
+conda create -n vllm python=3.10
+
+https://aitechtogether.com/python/117890.html
+
+
+
+
+conda 命令
+
+https://zhuanlan.zhihu.com/p/51137150

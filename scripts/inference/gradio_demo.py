@@ -71,13 +71,13 @@ parser.add_argument(
 )
 args = parser.parse_args()
 if args.only_cpu is True:
-    args.gpus = ""
+    args.gpus = "-1"
 
 import sys
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from attn_and_long_ctx_patches import apply_attention_patch, apply_ntk_scaling_patch
-apply_attention_patch(use_memory_efficient_attention=True)
+#apply_attention_patch(use_memory_efficient_attention=True)
 apply_ntk_scaling_patch(args.alpha)
 
 # Set CUDA devices if available
@@ -86,6 +86,21 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpus
 
 # Peft library can only import after setting CUDA devices
 from peft import PeftModel
+
+
+
+if torch.cuda.is_available():
+    print("Currently using GPU")
+else:
+    print("Currently using CPU")
+
+import bitsandbytes.autograd._functions as bnb_funcs
+
+def new_supports_igemmlt(device):
+    return False
+
+bnb_funcs.supports_igemmlt = new_supports_igemmlt
+
 
 
 # Set up the required components: model and tokenizer
@@ -101,6 +116,7 @@ def setup():
         device = torch.device(0)
     else:
         device = torch.device('cpu')
+    #device = torch.device('cpu')
     if args.tokenizer_path is None:
         args.tokenizer_path = args.lora_model
         if args.lora_model is None:
@@ -112,7 +128,7 @@ def setup():
         load_in_8bit=load_in_8bit,
         torch_dtype=load_type,
         low_cpu_mem_usage=True,
-        device_map='auto',
+        device_map='cpu',   #auto
     )
 
     model_vocab_size = base_model.get_input_embeddings().weight.size(0)
@@ -128,12 +144,13 @@ def setup():
             base_model,
             args.lora_model,
             torch_dtype=load_type,
-            device_map='auto',
+            device_map='cpu',  #auto
         )
     else:
         model = base_model
 
     if device == torch.device('cpu'):
+        model = model.to('cpu')
         model.float()
 
     model.eval()
@@ -278,7 +295,9 @@ def predict(
             break
 
     inputs = tokenizer(prompt, return_tensors="pt")
+    
     input_ids = inputs["input_ids"].to(device)
+    # input_ids = inputs["input_ids"].to('mps')
 
     generate_params = {
         'input_ids': input_ids,
